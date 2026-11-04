@@ -1,4 +1,3 @@
-
 import { Router } from "express";
 import pool from "../config/database.js";
 import {
@@ -11,7 +10,11 @@ const router = Router();
 router.post("/entrada", async (req, res) => {
   try {
     const resultado = await registrarEntrada(req.body);
-    res.status(201).json({ ok: true, data: resultado });
+
+    res.status(201).json({
+      ok: true,
+      data: resultado,
+    });
   } catch (error) {
     const mensaje =
       error.message || "No fue posible registrar la entrada.";
@@ -77,18 +80,37 @@ router.get("/vehiculo/:placa", async (req, res) => {
 router.get("/", async (_req, res) => {
   try {
     const [filas] = await pool.execute(
-      `SELECT m.id, v.placa, v.tipo, c.codigo AS celda,
-              m.fecha_entrada, m.fecha_salida,
-              m.acceso_entrada, m.acceso_salida
+      `SELECT
+          m.id,
+          v.placa,
+          v.tipo,
+          c.codigo AS celda,
+          m.fecha_entrada,
+          m.fecha_salida,
+          m.acceso_entrada,
+          m.acceso_salida,
+          m.operador_entrada_id,
+          m.operador_salida_id,
+          oe.nombre AS operador_entrada,
+          os.nombre AS operador_salida
        FROM movimientos m
        INNER JOIN vehiculos v ON v.id = m.vehiculo_id
        INNER JOIN celdas c ON c.id = m.celda_id
+       LEFT JOIN operadores oe
+          ON oe.id = m.operador_entrada_id
+       LEFT JOIN operadores os
+          ON os.id = m.operador_salida_id
        ORDER BY m.fecha_entrada DESC
        LIMIT 200`
     );
 
-    res.json({ ok: true, data: filas });
-  } catch {
+    res.json({
+      ok: true,
+      data: filas,
+    });
+  } catch (error) {
+    console.error("Error al consultar el historial:", error);
+
     res.status(500).json({
       ok: false,
       mensaje: "Error al consultar el historial.",
