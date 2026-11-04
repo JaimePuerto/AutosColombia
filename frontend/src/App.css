@@ -1025,3 +1025,43 @@
   padding: 14px 16px;
   border-radius: 8px;
 }
+
+
+/* Filtros del historial: búsqueda y estado en una sola fila */
+.history-filters {
+  display: flex;
+  width: min(100%, 520px);
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.history-filters .search-input {
+  min-width: 0;
+  max-width: none;
+  flex: 1.4;
+}
+
+.history-filters select.search-input {
+  flex: 1.05;
+}
+
+@media (max-width: 700px) {
+  .history-filters {
+    width: 100%;
+  }
+
+  .history-filters .search-input {
+    flex: 1.2;
+  }
+}
+
+@media (max-width: 480px) {
+  .history-filters {
+    gap: 8px;
+  }
+
+  .history-filters .search-input {
+    font-size: 10px;
+  }
+}

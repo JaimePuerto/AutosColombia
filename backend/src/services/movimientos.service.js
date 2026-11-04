@@ -32,44 +32,43 @@ export async function registrarEntrada({
       throw new Error("El operador no existe o está inactivo.");
     }
 
-    let [vehiculos] = await connection.execute(
+    // Verificar que el vehículo esté previamente registrado.
+    const [vehiculos] = await connection.execute(
       "SELECT id, tipo FROM vehiculos WHERE placa = ? FOR UPDATE",
       [placaNormalizada]
     );
 
-    let vehiculoId;
-
     if (vehiculos.length === 0) {
-      const [resultado] = await connection.execute(
-        "INSERT INTO vehiculos (placa, tipo) VALUES (?, ?)",
-        [placaNormalizada, tipo]
+      throw new Error(
+        "El vehículo no se encuentra registrado. Debe registrarse antes de ingresar al parqueadero."
       );
-      vehiculoId = resultado.insertId;
-    } else {
-      if (vehiculos[0].tipo !== tipo) {
-        throw new Error("El tipo no coincide con el vehículo registrado.");
-      }
-      vehiculoId = vehiculos[0].id;
     }
 
+    if (vehiculos[0].tipo !== tipo) {
+      throw new Error("El tipo no coincide con el vehículo registrado.");
+    }
+
+    const vehiculoId = vehiculos[0].id;
+
+    // Verificar que el vehículo no tenga un ingreso pendiente de salida.
     const [abiertos] = await connection.execute(
-        `SELECT m.id, c.codigo AS celda
-        FROM movimientos m
-        INNER JOIN celdas c ON c.id = m.celda_id
-        WHERE m.vehiculo_id = ? AND m.fecha_salida IS NULL
-        FOR UPDATE`,
-        [vehiculoId]
+      `SELECT m.id, c.codigo AS celda
+       FROM movimientos m
+       INNER JOIN celdas c ON c.id = m.celda_id
+       WHERE m.vehiculo_id = ? AND m.fecha_salida IS NULL
+       FOR UPDATE`,
+      [vehiculoId]
     );
 
     if (abiertos.length > 0) {
-        const celdaOcupada = abiertos[0].celda;
+      const celdaOcupada = abiertos[0].celda;
 
-        throw new Error(
-            `El vehículo con placa ${placaNormalizada} ya está parqueado en la celda ${celdaOcupada}.`
-    );
-}
+      throw new Error(
+        `El vehículo con placa ${placaNormalizada} ya está parqueado en la celda ${celdaOcupada}.`
+      );
+    }
 
-    // Bloquea las celdas del tipo mientras se selecciona una disponible.
+    // Bloquear las celdas del tipo mientras se selecciona una disponible.
     const [celdas] = await connection.execute(
       `SELECT c.id, c.codigo
        FROM celdas c
@@ -83,7 +82,8 @@ export async function registrarEntrada({
 
     for (const celda of celdas) {
       const [ocupaciones] = await connection.execute(
-        `SELECT id FROM movimientos
+        `SELECT id
+         FROM movimientos
          WHERE celda_id = ? AND fecha_salida IS NULL
          LIMIT 1`,
         [celda.id]
@@ -96,9 +96,12 @@ export async function registrarEntrada({
     }
 
     if (!celdaDisponible) {
-      throw new Error("No hay celdas disponibles para este tipo de vehículo.");
+      throw new Error(
+        "No hay celdas disponibles para este tipo de vehículo."
+      );
     }
 
+    // Registrar el movimiento de entrada.
     const [resultado] = await connection.execute(
       `INSERT INTO movimientos
        (vehiculo_id, celda_id, operador_entrada_id, acceso_entrada)
@@ -153,6 +156,7 @@ export async function registrarSalida({
       throw new Error("El operador no existe o está inactivo.");
     }
 
+    // Buscar el movimiento que todavía no tiene salida.
     const [movimientos] = await connection.execute(
       `SELECT m.id, v.placa, c.codigo AS celda
        FROM movimientos m
@@ -169,6 +173,7 @@ export async function registrarSalida({
 
     const movimiento = movimientos[0];
 
+    // Registrar la salida y el operador responsable.
     await connection.execute(
       `UPDATE movimientos
        SET fecha_salida = CURRENT_TIMESTAMP,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:3000/api";
+const API_URL = "http://localhost:3001/api";
 const OPERADOR_ID = 1;
 
 const menuItems = [
@@ -28,6 +28,7 @@ function App() {
   });
   const [totalMovimientos, setTotalMovimientos] = useState(0);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("TODOS");
   const [acceso, setAcceso] = useState("PRINCIPAL");
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");
@@ -82,6 +83,7 @@ function App() {
           movimiento: "Entrada",
           celda: item.celda,
           hora: formatearFecha(item.fecha_entrada),
+          operador: item.operador_entrada || "No identificado",
           estado: item.fecha_salida ? "Finalizado" : "Activo",
           fechaOrden: new Date(item.fecha_entrada).getTime(),
         };
@@ -97,6 +99,7 @@ function App() {
           movimiento: "Salida",
           celda: item.celda,
           hora: formatearFecha(item.fecha_salida),
+          operador: item.operador_salida || "No identificado",
           estado: "Finalizado",
           fechaOrden: new Date(item.fecha_salida).getTime(),
         };
@@ -197,9 +200,18 @@ function App() {
     }
   }
 
-  const movimientosFiltrados = movimientos.filter((item) =>
-    item.placa.toLowerCase().includes(busqueda.toLowerCase()),
-  );
+  const movimientosFiltrados = movimientos.filter((item) => {
+    const coincidePlaca = item.placa
+      .toLowerCase()
+      .includes(busqueda.toLowerCase());
+
+    const coincideEstado =
+      filtroEstado === "TODOS" ||
+      (filtroEstado === "ACTIVOS" && item.estado === "Activo") ||
+      (filtroEstado === "FINALIZADOS" && item.estado === "Finalizado");
+
+    return coincidePlaca && coincideEstado;
+  });
 
   const totalCeldas = Number(resumen.total_celdas || 0);
   const celdasCarros = Number(resumen.celdas_carros || 0);
@@ -639,15 +651,34 @@ function App() {
               <section className="panel recent-panel history-panel">
                 <div className="history-toolbar">
                   <div>
-                    <h3>Todos los movimientos</h3>
+                    <h3>
+                      {filtroEstado === "TODOS"
+                        ? "Todos los movimientos"
+                        : filtroEstado === "ACTIVOS"
+                          ? "Movimientos activos"
+                          : "Movimientos finalizados"}
+                    </h3>
                     <p>{movimientosFiltrados.length} movimientos registrados</p>
                   </div>
-                  <input
-                    className="search-input"
-                    value={busqueda}
-                    onChange={(event) => setBusqueda(event.target.value)}
-                    placeholder="Buscar por placa..."
-                  />
+
+                  <div className="history-filters">
+                    <select
+                      className="search-input"
+                      value={filtroEstado}
+                      onChange={(event) => setFiltroEstado(event.target.value)}
+                    >
+                      <option value="TODOS">Todos los movimientos</option>
+                      <option value="ACTIVOS">Activos</option>
+                      <option value="FINALIZADOS">Finalizados</option>
+                    </select>
+
+                    <input
+                      className="search-input"
+                      value={busqueda}
+                      onChange={(event) => setBusqueda(event.target.value)}
+                      placeholder="Buscar por placa..."
+                    />
+                  </div>
                 </div>
                 <MovimientosTabla movimientos={movimientosFiltrados} />
               </section>
@@ -678,6 +709,7 @@ function MovimientosTabla({ movimientos }) {
             <th>MOVIMIENTO</th>
             <th>CELDA</th>
             <th>HORA</th>
+            <th>OPERADOR</th>
             <th>ESTADO</th>
           </tr>
         </thead>
@@ -697,6 +729,7 @@ function MovimientosTabla({ movimientos }) {
               </td>
               <td>{item.celda}</td>
               <td>{item.hora}</td>
+              <td>{item.operador || "No identificado"}</td>
               <td>
                 <span
                   className={`pill ${item.estado === "Activo" ? "active-pill" : "neutral"}`}
