@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import Clientes from "./components/Clientes";
 
 const API_URL = "http://localhost:3001/api";
-const OPERADOR_ID = 1;
 
 const menuItems = [
   { id: "dashboard", label: "Panel principal", icon: "▦" },
   { id: "entrada", label: "Ingreso de vehículos", icon: "↘" },
   { id: "salida", label: "Salida de vehículos", icon: "↗" },
   { id: "historial", label: "Historial de movimientos", icon: "◷" },
+  { id: "clientes", label: "Gestión de clientes", icon: "♙", admin: true },
+  { id: "operadores", label: "Gestión de usuarios", icon: "♧", admin: true },
 ];
 
 function App() {
+  const [usuario, setUsuario] = useState(null);
+  const [token, setToken] = useState(() => sessionStorage.getItem("autoscolombia_token") || "");
+  const [cargandoAuth, setCargandoAuth] = useState(true);
   const [seccion, setSeccion] = useState("dashboard");
   const [placa, setPlaca] = useState("");
   const [tipo, setTipo] = useState("CARRO");
@@ -33,7 +38,57 @@ function App() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");
 
-  const seccionActual = menuItems.find((item) => item.id === seccion);
+  const menuVisible = menuItems.filter((item) => !item.admin || usuario?.rol === "ADMINISTRADOR");
+  const seccionActual = menuVisible.find((item) => item.id === seccion);
+
+  function encabezadosAuth(json = false) {
+    return {
+      ...(json ? { "Content-Type": "application/json" } : {}),
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
+  useEffect(() => {
+    let activo = true;
+    async function validarSesion() {
+      if (!token) { setCargandoAuth(false); return; }
+      try {
+        const respuesta = await fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok || !resultado.ok) throw new Error("Sesión vencida");
+        if (activo) setUsuario(resultado.data);
+      } catch {
+        sessionStorage.removeItem("autoscolombia_token");
+        if (activo) { setToken(""); setUsuario(null); }
+      } finally { if (activo) setCargandoAuth(false); }
+    }
+    validarSesion();
+    return () => { activo = false; };
+  }, [token]);
+
+  async function iniciarSesion(event) {
+    event.preventDefault();
+    const formulario = new FormData(event.currentTarget);
+    setErrorCarga("");
+    try {
+      const respuesta = await fetch(`${API_URL}/auth/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documento: formulario.get("documento"), password: formulario.get("password") }),
+      });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok || !resultado.ok) throw new Error(resultado.mensaje || "No fue posible iniciar sesión.");
+      sessionStorage.setItem("autoscolombia_token", resultado.data.token);
+      setToken(resultado.data.token);
+      setUsuario(resultado.data.usuario);
+      setSeccion("dashboard");
+    } catch (error) { setErrorCarga(error.message); }
+  }
+
+  async function cerrarSesion() {
+    try { await fetch(`${API_URL}/auth/logout`, { method: "POST", headers: encabezadosAuth() }); } catch { /* se limpia localmente */ }
+    sessionStorage.removeItem("autoscolombia_token");
+    setToken(""); setUsuario(null); setSeccion("dashboard");
+  }
 
   function formatearFecha(fecha) {
     if (!fecha) return "";
@@ -54,10 +109,14 @@ function App() {
 
     try {
       const [respuestaDashboard, respuestaMovimientos] = await Promise.all([
-        fetch(`${API_URL}/dashboard`),
-        fetch(`${API_URL}/movimientos`),
+        fetch(`${API_URL}/dashboard`, { headers: encabezadosAuth() }),
+        fetch(`${API_URL}/movimientos`, { headers: encabezadosAuth() }),
       ]);
 
+      if (respuestaDashboard.status === 401 || respuestaMovimientos.status === 401) {
+        await cerrarSesion();
+        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+      }
       if (!respuestaDashboard.ok || !respuestaMovimientos.ok) {
         throw new Error("No fue posible consultar los datos del parqueadero.");
       }
@@ -120,8 +179,8 @@ function App() {
   }
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    if (usuario) cargarDatos();
+  }, [usuario]);
 
   function cambiarSeccion(id) {
     setSeccion(id);
@@ -156,24 +215,24 @@ function App() {
         ? {
             placa: placaNormalizada,
             tipo,
-            operadorId: OPERADOR_ID,
             acceso,
           }
         : {
             placa: placaNormalizada,
-            operadorId: OPERADOR_ID,
             acceso,
           };
 
       const respuesta = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: encabezadosAuth(true),
         body: JSON.stringify(cuerpo),
       });
 
       const resultado = await respuesta.json();
+      if (respuesta.status === 401) {
+        await cerrarSesion();
+        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+      }
 
       if (!respuesta.ok || !resultado.ok) {
         throw new Error(
@@ -199,6 +258,9 @@ function App() {
       setMensaje(error.message || "No fue posible conectar con el servidor.");
     }
   }
+
+  if (cargandoAuth) return <div className="auth-screen"><div className="auth-card"><h2>AutosColombia</h2><p>Verificando sesión...</p></div></div>;
+  if (!usuario) return <Login onSubmit={iniciarSesion} error={errorCarga} />;
 
   const movimientosFiltrados = movimientos.filter((item) => {
     const coincidePlaca = item.placa
@@ -235,7 +297,7 @@ function App() {
         <div className="menu-label">MENÚ PRINCIPAL</div>
 
         <nav className="navigation">
-          {menuItems.map((item) => (
+          {menuVisible.map((item) => (
             <button
               key={item.id}
               className={`nav-item ${seccion === item.id ? "active" : ""}`}
@@ -275,11 +337,12 @@ function App() {
             <strong>{seccionActual?.label}</strong>
           </div>
           <div className="user-profile">
-            <div className="avatar">OP</div>
+            <div className="avatar">{usuario.nombre?.slice(0, 2).toUpperCase()}</div>
             <div>
-              <strong>Operador</strong>
-              <small>Administración</small>
+              <strong>{usuario.nombre}</strong>
+              <small>{usuario.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</small>
             </div>
+            <button className="text-button logout-button" onClick={cerrarSesion}>Cerrar sesión</button>
           </div>
         </header>
 
@@ -684,9 +747,83 @@ function App() {
               </section>
             </>
           )}
+
+          {seccion === "clientes" && usuario.rol === "ADMINISTRADOR" && <Clientes />}
+          {seccion === "operadores" && usuario.rol === "ADMINISTRADOR" && <Operadores token={token} />}
         </div>
       </main>
     </div>
+  );
+}
+
+function Login({ onSubmit, error }) {
+  return (
+    <div className="auth-screen">
+      <form className="auth-card" onSubmit={onSubmit}>
+        <div className="brand-icon auth-brand">A</div>
+        <p className="eyebrow">SISTEMA DE CONTROL</p>
+        <h1>AutosColombia</h1>
+        <p className="page-description">Ingresa con tus credenciales para continuar.</p>
+        <label className="field"><span>Documento</span><input name="documento" autoComplete="username" required placeholder="Número de documento" /></label>
+        <label className="field"><span>Contraseña</span><input name="password" type="password" autoComplete="current-password" required placeholder="Tu contraseña" /></label>
+        {error && <div className="form-message error" role="alert">{error}</div>}
+        <button className="primary-button auth-submit" type="submit">Iniciar sesión</button>
+      </form>
+    </div>
+  );
+}
+
+function Operadores({ token }) {
+  const [operadores, setOperadores] = useState([]);
+  const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState("success");
+  const [guardando, setGuardando] = useState(false);
+  const headers = { Authorization: `Bearer ${token}` };
+  async function cargar() {
+    const r = await fetch(`${API_URL}/operadores`, { headers });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible consultar usuarios.");
+    setOperadores(j.data || []);
+  }
+  useEffect(() => { cargar().catch(e => { setMensaje(e.message); setTipoMensaje("error"); }); }, []);
+  async function crear(event) {
+    event.preventDefault(); setGuardando(true); setMensaje("");
+    const formulario = event.currentTarget;
+    const fd = new FormData(formulario);
+    const datos = Object.fromEntries(fd.entries());
+    try {
+      const r = await fetch(`${API_URL}/operadores`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(datos) });
+      const j = await r.json(); if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible crear el usuario.");
+      formulario.reset(); setMensaje("Usuario creado correctamente."); setTipoMensaje("success"); await cargar();
+    } catch (e) { setMensaje(e.message); setTipoMensaje("error"); }
+    finally { setGuardando(false); }
+  }
+  async function cambiarEstado(item) {
+    const estado = item.estado === "ACTIVO" ? "SUSPENDIDO" : "ACTIVO";
+    if (!window.confirm(`¿Deseas ${estado === "ACTIVO" ? "activar" : "suspender"} a ${item.nombre}?`)) return;
+    try {
+      const r = await fetch(`${API_URL}/operadores/${item.id}/estado`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ estado }) });
+      const j = await r.json(); if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible cambiar el estado.");
+      setMensaje(j.mensaje); setTipoMensaje("success"); await cargar();
+    } catch (e) { setMensaje(e.message); setTipoMensaje("error"); }
+  }
+  return (
+    <>
+      <div className="page-heading"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Gestión de usuarios</h2><p className="page-description">Crea operadores y administra sus perfiles de acceso.</p></div></div>
+      <section className="panel form-panel"><div className="form-section-heading"><span className="form-heading-icon">♧</span><div><h3>Registrar usuario</h3><p>Las credenciales serán utilizadas para iniciar sesión.</p></div></div>
+        <form onSubmit={crear}><div className="form-grid">
+          <label className="field"><span>Nombre completo *</span><input name="nombre" required maxLength="100" /></label>
+          <label className="field"><span>Documento *</span><input name="documento" required maxLength="30" /></label>
+          <label className="field"><span>Teléfono</span><input name="telefono" maxLength="20" /></label>
+          <label className="field"><span>Perfil *</span><select name="rol" defaultValue="OPERADOR"><option value="OPERADOR">Operador</option><option value="ADMINISTRADOR">Administrador</option></select></label>
+          <label className="field"><span>Contraseña inicial *</span><input name="password" type="password" minLength="10" required autoComplete="new-password" /><small>Mínimo 10 caracteres.</small></label>
+        </div><div className="form-actions"><button className="primary-button" disabled={guardando}>{guardando ? "Guardando..." : "Crear usuario"}</button></div></form>
+      </section>
+      {mensaje && <div className={`form-message ${tipoMensaje}`}>{mensaje}</div>}
+      <section className="panel recent-panel"><div className="panel-heading"><div><h3>Usuarios registrados</h3><p>{operadores.length} usuarios</p></div><button className="text-button" onClick={() => cargar()}>Actualizar</button></div>
+        <div className="table-wrapper"><table className="movement-table"><thead><tr><th>NOMBRE</th><th>DOCUMENTO</th><th>PERFIL</th><th>ESTADO</th><th>ACCIÓN</th></tr></thead><tbody>{operadores.map(item => <tr key={item.id}><td><strong>{item.nombre}</strong></td><td>{item.documento}</td><td>{item.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</td><td>{item.bloqueado ? "Bloqueado" : item.estado}</td><td><button className="text-button" onClick={() => cambiarEstado(item)}>{item.estado === "ACTIVO" ? "Suspender" : "Activar"}</button></td></tr>)}</tbody></table></div>
+      </section>
+    </>
   );
 }
 
@@ -746,3 +883,4 @@ function MovimientosTabla({ movimientos }) {
 }
 
 export default App;
+

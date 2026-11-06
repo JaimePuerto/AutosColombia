@@ -34,7 +34,7 @@ export async function registrarEntrada({
 
     // Verificar que el vehículo esté previamente registrado.
     const [vehiculos] = await connection.execute(
-      "SELECT id, tipo FROM vehiculos WHERE placa = ? FOR UPDATE",
+      "SELECT id, tipo, activo FROM vehiculos WHERE placa = ? FOR UPDATE",
       [placaNormalizada]
     );
 
@@ -46,6 +46,13 @@ export async function registrarEntrada({
 
     if (vehiculos[0].tipo !== tipo) {
       throw new Error("El tipo no coincide con el vehículo registrado.");
+    }
+
+    // Impedir el ingreso de vehículos inactivos.
+    if (!vehiculos[0].activo) {
+      throw new Error(
+        `El vehículo con placa ${placaNormalizada} se encuentra inactivo y no puede ingresar al parqueadero.`
+      );
     }
 
     const vehiculoId = vehiculos[0].id;
@@ -157,6 +164,8 @@ export async function registrarSalida({
     }
 
     // Buscar el movimiento que todavía no tiene salida.
+    // No se valida el estado del vehículo: debe poder salir
+    // aunque haya sido desactivado después de su ingreso.
     const [movimientos] = await connection.execute(
       `SELECT m.id, v.placa, c.codigo AS celda
        FROM movimientos m

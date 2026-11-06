@@ -1,8 +1,10 @@
 
 import { Router } from "express";
+import { requiereAutenticacion, requiereAdministrador } from "../middleware/auth.middleware.js";
 import pool from "../config/database.js";
 
 const router = Router();
+router.use(requiereAutenticacion);
 
 router.get("/disponibles", async (req, res) => {
   const { tipo } = req.query;

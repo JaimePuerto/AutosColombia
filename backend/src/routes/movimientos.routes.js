@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requiereAutenticacion, requiereAdministrador } from "../middleware/auth.middleware.js";
 import pool from "../config/database.js";
 import {
   registrarEntrada,
@@ -6,10 +7,11 @@ import {
 } from "../services/movimientos.service.js";
 
 const router = Router();
+router.use(requiereAutenticacion);
 
 router.post("/entrada", async (req, res) => {
   try {
-    const resultado = await registrarEntrada(req.body);
+    const resultado = await registrarEntrada({ ...req.body, operadorId: req.user.id });
 
     res.status(201).json({
       ok: true,
@@ -31,7 +33,7 @@ router.post("/entrada", async (req, res) => {
 
 router.post("/salida", async (req, res) => {
   try {
-    const resultado = await registrarSalida(req.body);
+    const resultado = await registrarSalida({ ...req.body, operadorId: req.user.id });
 
     res.json({
       ok: true,
