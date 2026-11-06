@@ -1065,3 +1065,32 @@
     font-size: 10px;
   }
 }
+
+/* Autenticación y gestión de usuarios - Iteración 2 */
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: #f3f5f8;
+}
+.auth-card {
+  width: min(100%, 430px);
+  display: grid;
+  gap: 18px;
+  padding: 38px;
+  background: #fff;
+  border: 1px solid #e7eaf0;
+  border-radius: 18px;
+  box-shadow: 0 18px 55px rgba(22, 34, 51, .09);
+}
+.auth-card h1 { margin: 0; color: #171d2b; font-size: 29px; }
+.auth-card .page-description { margin: -10px 0 4px; }
+.auth-brand { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 13px; }
+.auth-submit { width: 100%; justify-content: center; margin-top: 4px; }
+.logout-button { margin-left: 12px; white-space: nowrap; }
+.user-profile { gap: 10px; }
+@media (max-width: 640px) {
+  .auth-card { padding: 26px 22px; }
+  .logout-button { margin-left: 0; }
+}
