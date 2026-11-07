@@ -1,14 +1,16 @@
-import { autenticarToken } from '../services/auth.service.js';
+import pool from '../config/database.js';
 
+// La Iteración 1 trabaja directamente con el Operador 1, sin login ni token.
 export async function requiereAutenticacion(req, res, next) {
   try {
-    const authorization = req.headers.authorization || '';
-    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-    const user = await autenticarToken(token);
-    if (!user) {
-      return res.status(401).json({ ok: false, mensaje: 'La sesión no es válida o ha expirado. Inicia sesión nuevamente.' });
+    const [rows] = await pool.execute(
+      `SELECT id, nombre, documento, rol FROM operadores WHERE rol = 'OPERADOR' AND activo = TRUE ORDER BY id ASC LIMIT 1`
+    );
+    const operador = rows[0];
+    if (!operador) {
+      return res.status(503).json({ ok: false, mensaje: 'No existe un Operador 1 activo para iniciar la Iteración 1.' });
     }
-    req.user = user;
+    req.user = operador;
     next();
   } catch (error) {
     next(error);

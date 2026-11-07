@@ -15,7 +15,6 @@ const menuItems = [
 
 function App() {
   const [usuario, setUsuario] = useState(null);
-  const [token, setToken] = useState(() => sessionStorage.getItem("autoscolombia_token") || "");
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [seccion, setSeccion] = useState("dashboard");
   const [placa, setPlaca] = useState("");
@@ -42,53 +41,26 @@ function App() {
   const seccionActual = menuVisible.find((item) => item.id === seccion);
 
   function encabezadosAuth(json = false) {
-    return {
-      ...(json ? { "Content-Type": "application/json" } : {}),
-      Authorization: `Bearer ${token}`,
-    };
+    return json ? { "Content-Type": "application/json" } : {};
   }
 
   useEffect(() => {
     let activo = true;
-    async function validarSesion() {
-      if (!token) { setCargandoAuth(false); return; }
+    async function cargarOperadorInicial() {
       try {
-        const respuesta = await fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+        const respuesta = await fetch(`${API_URL}/session`);
         const resultado = await respuesta.json();
-        if (!respuesta.ok || !resultado.ok) throw new Error("Sesión vencida");
+        if (!respuesta.ok || !resultado.ok) throw new Error(resultado.mensaje || "No fue posible cargar el Operador 1.");
         if (activo) setUsuario(resultado.data);
-      } catch {
-        sessionStorage.removeItem("autoscolombia_token");
-        if (activo) { setToken(""); setUsuario(null); }
-      } finally { if (activo) setCargandoAuth(false); }
+      } catch (error) {
+        if (activo) setErrorCarga(error.message);
+      } finally {
+        if (activo) setCargandoAuth(false);
+      }
     }
-    validarSesion();
+    cargarOperadorInicial();
     return () => { activo = false; };
-  }, [token]);
-
-  async function iniciarSesion(event) {
-    event.preventDefault();
-    const formulario = new FormData(event.currentTarget);
-    setErrorCarga("");
-    try {
-      const respuesta = await fetch(`${API_URL}/auth/login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documento: formulario.get("documento"), password: formulario.get("password") }),
-      });
-      const resultado = await respuesta.json();
-      if (!respuesta.ok || !resultado.ok) throw new Error(resultado.mensaje || "No fue posible iniciar sesión.");
-      sessionStorage.setItem("autoscolombia_token", resultado.data.token);
-      setToken(resultado.data.token);
-      setUsuario(resultado.data.usuario);
-      setSeccion("dashboard");
-    } catch (error) { setErrorCarga(error.message); }
-  }
-
-  async function cerrarSesion() {
-    try { await fetch(`${API_URL}/auth/logout`, { method: "POST", headers: encabezadosAuth() }); } catch { /* se limpia localmente */ }
-    sessionStorage.removeItem("autoscolombia_token");
-    setToken(""); setUsuario(null); setSeccion("dashboard");
-  }
+  }, []);
 
   function formatearFecha(fecha) {
     if (!fecha) return "";
@@ -113,10 +85,6 @@ function App() {
         fetch(`${API_URL}/movimientos`, { headers: encabezadosAuth() }),
       ]);
 
-      if (respuestaDashboard.status === 401 || respuestaMovimientos.status === 401) {
-        await cerrarSesion();
-        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
-      }
       if (!respuestaDashboard.ok || !respuestaMovimientos.ok) {
         throw new Error("No fue posible consultar los datos del parqueadero.");
       }
@@ -229,10 +197,6 @@ function App() {
       });
 
       const resultado = await respuesta.json();
-      if (respuesta.status === 401) {
-        await cerrarSesion();
-        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
-      }
 
       if (!respuesta.ok || !resultado.ok) {
         throw new Error(
@@ -259,8 +223,8 @@ function App() {
     }
   }
 
-  if (cargandoAuth) return <div className="auth-screen"><div className="auth-card"><h2>AutosColombia</h2><p>Verificando sesión...</p></div></div>;
-  if (!usuario) return <Login onSubmit={iniciarSesion} error={errorCarga} />;
+  if (cargandoAuth) return <div className="auth-screen"><div className="auth-card"><h2>AutosColombia</h2><p>Iniciando con Operador 1...</p></div></div>;
+  if (!usuario) return <div className="auth-screen"><div className="auth-card"><h2>AutosColombia</h2><p className="form-message error">{errorCarga || "No fue posible cargar el Operador 1."}</p></div></div>;
 
   const movimientosFiltrados = movimientos.filter((item) => {
     const coincidePlaca = item.placa
@@ -342,7 +306,6 @@ function App() {
               <strong>{usuario.nombre}</strong>
               <small>{usuario.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</small>
             </div>
-            <button className="text-button logout-button" onClick={cerrarSesion}>Cerrar sesión</button>
           </div>
         </header>
 
@@ -749,36 +712,19 @@ function App() {
           )}
 
           {seccion === "clientes" && usuario.rol === "ADMINISTRADOR" && <Clientes />}
-          {seccion === "operadores" && usuario.rol === "ADMINISTRADOR" && <Operadores token={token} />}
+          {seccion === "operadores" && usuario.rol === "ADMINISTRADOR" && <Operadores />}
         </div>
       </main>
     </div>
   );
 }
 
-function Login({ onSubmit, error }) {
-  return (
-    <div className="auth-screen">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <div className="brand-icon auth-brand">A</div>
-        <p className="eyebrow">SISTEMA DE CONTROL</p>
-        <h1>AutosColombia</h1>
-        <p className="page-description">Ingresa con tus credenciales para continuar.</p>
-        <label className="field"><span>Documento</span><input name="documento" autoComplete="username" required placeholder="Número de documento" /></label>
-        <label className="field"><span>Contraseña</span><input name="password" type="password" autoComplete="current-password" required placeholder="Tu contraseña" /></label>
-        {error && <div className="form-message error" role="alert">{error}</div>}
-        <button className="primary-button auth-submit" type="submit">Iniciar sesión</button>
-      </form>
-    </div>
-  );
-}
-
-function Operadores({ token }) {
+function Operadores() {
   const [operadores, setOperadores] = useState([]);
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("success");
   const [guardando, setGuardando] = useState(false);
-  const headers = { Authorization: `Bearer ${token}` };
+  const headers = {};
   async function cargar() {
     const r = await fetch(`${API_URL}/operadores`, { headers });
     const j = await r.json();

@@ -26,6 +26,20 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+app.get('/api/session', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, nombre, documento, rol FROM operadores WHERE rol = 'OPERADOR' AND activo = TRUE ORDER BY id ASC LIMIT 1`
+    );
+    if (!rows.length) return res.status(503).json({ ok: false, mensaje: 'No existe un Operador 1 activo.' });
+    res.json({ ok: true, data: rows[0] });
+  } catch (error) {
+    console.error('Error al cargar el Operador 1:', error);
+    res.status(500).json({ ok: false, mensaje: 'No fue posible cargar el operador inicial.' });
+  }
+});
+
+
 app.use('/api/auth', authRoutes);
 app.use('/api/movimientos', movimientosRoutes);
 app.use('/api/celdas', celdasRoutes);

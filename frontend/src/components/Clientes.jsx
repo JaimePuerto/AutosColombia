@@ -2,8 +2,6 @@
 import { useEffect, useState } from "react";
 
 const API_URL = "http://localhost:3001/api";
-const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem("autoscolombia_token") || ""}` });
-
 const formularioInicial = {
   tipo_cliente: "PERSONA",
   tipo_documento: "CC",
@@ -57,10 +55,9 @@ function Clientes() {
 
       const respuesta = await fetch(
         `${API_URL}/clientes?${parametros.toString()}`,
-        { headers: authHeader() }
+        {}
       );
 
-      if (respuesta.status === 401) { sessionStorage.removeItem("autoscolombia_token"); window.location.reload(); return; }
       const resultado = await respuesta.json();
 
       if (!respuesta.ok || !resultado.ok) {
@@ -147,14 +144,12 @@ function Clientes() {
         {
           method: esEdicion ? "PUT" : "POST",
           headers: {
-            ...authHeader(),
             "Content-Type": "application/json",
           },
           body: JSON.stringify(formulario),
         }
       );
 
-      if (respuesta.status === 401) { sessionStorage.removeItem("autoscolombia_token"); window.location.reload(); return; }
       const resultado = await respuesta.json();
 
       if (!respuesta.ok || !resultado.ok) {
@@ -200,14 +195,12 @@ function Clientes() {
         {
           method: "PATCH",
           headers: {
-            ...authHeader(),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ activo: !activo }),
         }
       );
 
-      if (respuesta.status === 401) { sessionStorage.removeItem("autoscolombia_token"); window.location.reload(); return; }
       const resultado = await respuesta.json();
 
       if (!respuesta.ok || !resultado.ok) {
