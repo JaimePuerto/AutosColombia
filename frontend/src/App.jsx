@@ -1,6 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Clientes from "./components/Clientes";
+import Vehiculos from "./components/Vehiculos";
+import Auditoria from "./components/Auditoria";
+import Celdas from "./components/Celdas";
+import Suscripciones from "./components/Suscripciones";
+import MovimientosAdmin from "./components/MovimientosAdmin";
+import Cuenta from "./components/Cuenta";
+import Recuperacion from "./components/Recuperacion";
+import Operadores from "./components/Operadores";
+import Modal from "./components/Modal";
 
 const API_URL = "http://localhost:3001/api";
 
@@ -9,15 +18,97 @@ const menuItems = [
   { id: "entrada", label: "Ingreso de vehículos", icon: "↘" },
   { id: "salida", label: "Salida de vehículos", icon: "↗" },
   { id: "historial", label: "Historial de movimientos", icon: "◷" },
-  { id: "clientes", label: "Gestión de clientes", icon: "♙", admin: true },
+  { id: "clientes", label: "Gestión de clientes", icon: "♙" },
+  { id: "vehiculos", label: "Gestión de vehículos", icon: "▤", admin: true },
   { id: "operadores", label: "Gestión de usuarios", icon: "♧", admin: true },
+  { id: "auditoria", label: "Auditoría", icon: "◷", admin: true },
+  { id: "celdas", label: "Gestión de celdas", icon: "▦", admin: true },
+  { id: "suscripciones", label: "Suscripciones", icon: "▣", admin: true },
 ];
+
+function formatearFecha(fecha) {
+  if (!fecha) return "";
+
+  return new Date(fecha).toLocaleString("es-CO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+// Convierte los movimientos del backend en filas de entrada, salida o anulación.
+function formatearMovimientos(filas) {
+  const resultado = filas.flatMap((item) => {
+    if (item.anulado_en) {
+      return [
+        {
+          id: `${item.id}-anulado`,
+          placa: item.placa,
+          tipo: item.tipo,
+          registroOriginal: item,
+          movimiento: "Anulación",
+          celda: item.celda,
+          hora: formatearFecha(item.anulado_en),
+          operador:
+            item.operador_salida || item.operador_entrada || "No identificado",
+          detalle: item.motivo_anulacion || "",
+          estado: "Anulado",
+          fechaOrden: new Date(item.anulado_en).getTime(),
+        },
+      ];
+    }
+
+    const entrada = {
+      id: `${item.id}-entrada`,
+      placa: item.placa,
+      tipo: item.tipo,
+      registroOriginal: item,
+      movimiento: "Entrada",
+      celda: item.celda,
+      hora: formatearFecha(item.fecha_entrada),
+      operador: item.operador_entrada || "No identificado",
+      estado: item.fecha_salida ? "Finalizado" : "Activo",
+      fechaOrden: new Date(item.fecha_entrada).getTime(),
+    };
+
+    if (!item.fecha_salida) {
+      return [entrada];
+    }
+
+    const salida = {
+      id: `${item.id}-salida`,
+      placa: item.placa,
+      tipo: item.tipo,
+      registroOriginal: item,
+      movimiento: "Salida",
+      celda: item.celda,
+      hora: formatearFecha(item.fecha_salida),
+      operador: item.operador_salida || "No identificado",
+      estado: "Finalizado",
+      fechaOrden: new Date(item.fecha_salida).getTime(),
+    };
+
+    return [salida, entrada];
+  });
+
+  resultado.sort((a, b) => b.fechaOrden - a.fechaOrden);
+
+  return resultado;
+}
 
 function App() {
   const [usuario, setUsuario] = useState(null);
   const [token, setToken] = useState(() => sessionStorage.getItem("autoscolombia_token") || "");
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [seccion, setSeccion] = useState("dashboard");
+  const [menuUsuarioAbierto, setMenuUsuarioAbierto] = useState(false);
+  const [mostrarCuenta, setMostrarCuenta] = useState(false);
+  const [accionMovimiento, setAccionMovimiento] = useState(null);
+  const [movimientoSeleccionado, setMovimientoSeleccionado] = useState(null);
+  const menuUsuarioRef = useRef(null);
   const [placa, setPlaca] = useState("");
   const [tipo, setTipo] = useState("CARRO");
   const [mensaje, setMensaje] = useState("");
@@ -34,12 +125,39 @@ function App() {
   const [totalMovimientos, setTotalMovimientos] = useState(0);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
+  const [historial, setHistorial] = useState([]);
+  const [versionHistorial, setVersionHistorial] = useState(0);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState("");
   const [acceso, setAcceso] = useState("PRINCIPAL");
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");
+  // RF-12: pantalla de recuperación de contraseña desde el inicio de sesión.
+  const [mostrarRecuperacion, setMostrarRecuperacion] = useState(
+    () => new URLSearchParams(window.location.search).has("recuperacion"),
+  );
 
   const menuVisible = menuItems.filter((item) => !item.admin || usuario?.rol === "ADMINISTRADOR");
   const seccionActual = menuVisible.find((item) => item.id === seccion);
+
+  useEffect(() => {
+    if (!menuUsuarioAbierto) return undefined;
+
+    function cerrarAlHacerClickFuera(event) {
+      if (!menuUsuarioRef.current?.contains(event.target)) setMenuUsuarioAbierto(false);
+    }
+
+    function cerrarConEscape(event) {
+      if (event.key === "Escape") setMenuUsuarioAbierto(false);
+    }
+
+    document.addEventListener("pointerdown", cerrarAlHacerClickFuera);
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.removeEventListener("pointerdown", cerrarAlHacerClickFuera);
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, [menuUsuarioAbierto]);
 
   function encabezadosAuth(json = false) {
     return {
@@ -90,19 +208,6 @@ function App() {
     setToken(""); setUsuario(null); setSeccion("dashboard");
   }
 
-  function formatearFecha(fecha) {
-    if (!fecha) return "";
-
-    return new Date(fecha).toLocaleString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }
-
   async function cargarDatos() {
     setCargando(true);
     setErrorCarga("");
@@ -134,41 +239,7 @@ function App() {
 
       const filas = resultadoMovimientos.data || [];
       setTotalMovimientos(filas.length);
-      const movimientosFormateados = filas.flatMap((item) => {
-        const entrada = {
-          id: `${item.id}-entrada`,
-          placa: item.placa,
-          tipo: item.tipo,
-          movimiento: "Entrada",
-          celda: item.celda,
-          hora: formatearFecha(item.fecha_entrada),
-          operador: item.operador_entrada || "No identificado",
-          estado: item.fecha_salida ? "Finalizado" : "Activo",
-          fechaOrden: new Date(item.fecha_entrada).getTime(),
-        };
-
-        if (!item.fecha_salida) {
-          return [entrada];
-        }
-
-        const salida = {
-          id: `${item.id}-salida`,
-          placa: item.placa,
-          tipo: item.tipo,
-          movimiento: "Salida",
-          celda: item.celda,
-          hora: formatearFecha(item.fecha_salida),
-          operador: item.operador_salida || "No identificado",
-          estado: "Finalizado",
-          fechaOrden: new Date(item.fecha_salida).getTime(),
-        };
-
-        return [salida, entrada];
-      });
-
-      movimientosFormateados.sort((a, b) => b.fechaOrden - a.fechaOrden);
-
-      setMovimientos(movimientosFormateados);
+      setMovimientos(formatearMovimientos(filas));
     } catch (error) {
       setErrorCarga(
         error.message || "No fue posible conectar con el servidor.",
@@ -179,12 +250,69 @@ function App() {
   }
 
   useEffect(() => {
-    if (usuario) cargarDatos();
+    if (usuario && !usuario.passwordTemporal) cargarDatos();
   }, [usuario]);
+
+  // Consulta el historial con los filtros aplicados en el backend (con retardo para el buscador).
+  useEffect(() => {
+    if (!usuario || seccion !== "historial") return undefined;
+
+    const parametros = new URLSearchParams();
+    if (filtroEstado !== "TODOS") parametros.set("estado", filtroEstado);
+    if (busqueda.trim()) parametros.set("placa", busqueda.trim());
+    parametros.set("limite", "300");
+
+    let activo = true;
+    const temporizador = setTimeout(async () => {
+      setCargandoHistorial(true);
+      setErrorHistorial("");
+
+      try {
+        const respuesta = await fetch(`${API_URL}/movimientos?${parametros.toString()}`, {
+          headers: encabezadosAuth(),
+        });
+
+        if (respuesta.status === 401) {
+          await cerrarSesion();
+          throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+        }
+
+        const resultado = await respuesta.json();
+        if (!respuesta.ok || !resultado.ok) {
+          throw new Error(resultado.mensaje || "No fue posible consultar el historial.");
+        }
+
+        if (activo) setHistorial(formatearMovimientos(resultado.data || []));
+      } catch (error) {
+        if (activo) {
+          setHistorial([]);
+          setErrorHistorial(error.message || "No fue posible consultar el historial.");
+        }
+      } finally {
+        if (activo) setCargandoHistorial(false);
+      }
+    }, 300);
+
+    return () => {
+      activo = false;
+      clearTimeout(temporizador);
+    };
+  }, [usuario, seccion, filtroEstado, busqueda, versionHistorial]);
 
   function cambiarSeccion(id) {
     setSeccion(id);
+    setMenuUsuarioAbierto(false);
     setMensaje("");
+  }
+
+  function abrirAccionMovimiento(accion, movimiento) {
+    setMovimientoSeleccionado(movimiento);
+    setAccionMovimiento(accion);
+  }
+
+  function cerrarAccionMovimiento() {
+    setAccionMovimiento(null);
+    setMovimientoSeleccionado(null);
   }
 
   async function registrarMovimiento(event) {
@@ -197,11 +325,24 @@ function App() {
     const esCarro = /^[A-Z]{3}\d{3}$/.test(placaNormalizada);
     const esMoto = /^[A-Z]{3}\d{2}[A-Z]$/.test(placaNormalizada);
 
-    if ((tipo === "CARRO" && !esCarro) || (tipo === "MOTO" && !esMoto)) {
+    // En la salida el tipo ya está registrado en el sistema, por lo que sólo se valida
+    // que la placa corresponda a un formato admitido (carro/camioneta o moto).
+    if (!esEntrada) {
+      if (!esCarro && !esMoto) {
+        setMensaje(
+          "La placa debe tener 3 letras y 3 números (carro o camioneta) o 3 letras, 2 números y una letra final (moto).",
+        );
+        return;
+      }
+    } else if (
+      // RF-01: las camionetas usan el mismo formato de placa que los carros.
+      ((tipo === "CARRO" || tipo === "CAMIONETA") && !esCarro) ||
+      (tipo === "MOTO" && !esMoto)
+    ) {
       setMensaje(
-        tipo === "CARRO"
-          ? "La placa del carro debe tener 3 letras y 3 números."
-          : "La placa de la moto debe tener 3 letras, 2 números y una letra final.",
+        tipo === "MOTO"
+          ? "La placa de la moto debe tener 3 letras, 2 números y una letra final."
+          : "La placa del carro o camioneta debe tener 3 letras y 3 números.",
       );
       return;
     }
@@ -260,20 +401,40 @@ function App() {
   }
 
   if (cargandoAuth) return <div className="auth-screen"><div className="auth-card"><h2>AutosColombia</h2><p>Verificando sesión...</p></div></div>;
-  if (!usuario) return <Login onSubmit={iniciarSesion} error={errorCarga} />;
 
-  const movimientosFiltrados = movimientos.filter((item) => {
-    const coincidePlaca = item.placa
-      .toLowerCase()
-      .includes(busqueda.toLowerCase());
+  // RF-12: recuperación de contraseña por correo (pantalla previa al inicio de sesión).
+  if (mostrarRecuperacion) {
+    return (
+      <Recuperacion
+        onVolver={() => {
+          setMostrarRecuperacion(false);
+          window.history.replaceState({}, "", window.location.pathname);
+        }}
+      />
+    );
+  }
 
-    const coincideEstado =
-      filtroEstado === "TODOS" ||
-      (filtroEstado === "ACTIVOS" && item.estado === "Activo") ||
-      (filtroEstado === "FINALIZADOS" && item.estado === "Finalizado");
+  if (!usuario) return <Login onSubmit={iniciarSesion} error={errorCarga} onRecuperar={() => setMostrarRecuperacion(true)} />;
 
-    return coincidePlaca && coincideEstado;
-  });
+  // RF-10: si la cuenta usa una contraseña temporal, el cambio es obligatorio.
+  if (usuario.passwordTemporal) {
+    return (
+      <Cuenta
+        token={token}
+        usuario={usuario}
+        modoForzado
+        onCambiada={async () => {
+          try {
+            const respuesta = await fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+            const resultado = await respuesta.json();
+            if (respuesta.ok && resultado.ok) setUsuario(resultado.data);
+          } catch { /* el middleware ya no bloqueará tras el cambio */ }
+        }}
+      />
+    );
+  }
+
+  const movimientosFiltrados = historial;
 
   const totalCeldas = Number(resumen.total_celdas || 0);
   const celdasCarros = Number(resumen.celdas_carros || 0);
@@ -336,13 +497,53 @@ function App() {
             <span className="breadcrumb-separator">/</span>
             <strong>{seccionActual?.label}</strong>
           </div>
-          <div className="user-profile">
-            <div className="avatar">{usuario.nombre?.slice(0, 2).toUpperCase()}</div>
-            <div>
-              <strong>{usuario.nombre}</strong>
-              <small>{usuario.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</small>
-            </div>
-            <button className="text-button logout-button" onClick={cerrarSesion}>Cerrar sesión</button>
+          <div className="user-profile" ref={menuUsuarioRef}>
+            <button
+              type="button"
+              className="user-menu-trigger"
+              aria-haspopup="menu"
+              aria-expanded={menuUsuarioAbierto}
+              onClick={() => setMenuUsuarioAbierto((abierto) => !abierto)}
+            >
+              <span className="avatar">{usuario.nombre?.slice(0, 2).toUpperCase()}</span>
+              <span className="user-menu-info">
+                <strong>{usuario.nombre}</strong>
+                <small>{usuario.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</small>
+              </span>
+              <span className={`user-menu-chevron ${menuUsuarioAbierto ? "open" : ""}`} aria-hidden="true">⌄</span>
+            </button>
+
+            {menuUsuarioAbierto && (
+              <div className="user-dropdown" role="menu">
+                <button
+                  type="button"
+                  className="user-dropdown-option"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuUsuarioAbierto(false);
+                    setMostrarCuenta(true);
+                  }}
+                >
+                  <span className="user-dropdown-icon">⚙</span>
+                  <span>
+                    <strong>Mi cuenta</strong>
+                    <small>Cambiar contraseña</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="user-dropdown-option logout-option"
+                  role="menuitem"
+                  onClick={cerrarSesion}
+                >
+                  <span className="user-dropdown-icon">↪</span>
+                  <span>
+                    <strong>Cerrar sesión</strong>
+                    <small>Salir de AutosColombia</small>
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -622,29 +823,34 @@ function App() {
                           setPlaca(event.target.value.toUpperCase())
                         }
                         placeholder={
-                          tipo === "CARRO" ? "Ej. ABC123" : "Ej. KLM45D"
+                          seccion === "entrada" && tipo === "MOTO"
+                            ? "Ej. KLM45D"
+                            : "Ej. ABC123"
                         }
                         maxLength={7}
                         required
                       />
                       <small>
-                        Carro: 3 letras y 3 números. Moto: 3 letras, 2 números y
-                        una letra.
+                        Carro y camioneta: 3 letras y 3 números. Moto: 3 letras, 2
+                        números y una letra.
                       </small>
                     </label>
 
-                    <label className="field">
-                      <span>
-                        Tipo de vehículo <b>*</b>
-                      </span>
-                      <select
-                        value={tipo}
-                        onChange={(event) => setTipo(event.target.value)}
-                      >
-                        <option value="CARRO">Carro</option>
-                        <option value="MOTO">Moto</option>
-                      </select>
-                    </label>
+                    {seccion === "entrada" && (
+                      <label className="field">
+                        <span>
+                          Tipo de vehículo <b>*</b>
+                        </span>
+                        <select
+                          value={tipo}
+                          onChange={(event) => setTipo(event.target.value)}
+                        >
+                          <option value="CARRO">Carro</option>
+                          <option value="MOTO">Moto</option>
+                          <option value="CAMIONETA">Camioneta</option>
+                        </select>
+                      </label>
+                    )}
 
                     <label className="field">
                       <span>Acceso</span>
@@ -656,7 +862,7 @@ function App() {
                         <option value="SECUNDARIO">Acceso secundario</option>
                       </select>
                       <small>
-                        La validación de horarios se conectará al backend.
+                        Acceso por el que el vehículo ingresa o sale del parqueadero.
                       </small>
                     </label>
                   </div>
@@ -719,9 +925,15 @@ function App() {
                         ? "Todos los movimientos"
                         : filtroEstado === "ACTIVOS"
                           ? "Movimientos activos"
-                          : "Movimientos finalizados"}
+                          : filtroEstado === "ANULADOS"
+                            ? "Movimientos anulados"
+                            : "Movimientos finalizados"}
                     </h3>
-                    <p>{movimientosFiltrados.length} movimientos registrados</p>
+                    <p>
+                      {cargandoHistorial
+                        ? "Consultando movimientos..."
+                        : `${movimientosFiltrados.length} movimientos registrados`}
+                    </p>
                   </div>
 
                   <div className="history-filters">
@@ -733,6 +945,7 @@ function App() {
                       <option value="TODOS">Todos los movimientos</option>
                       <option value="ACTIVOS">Activos</option>
                       <option value="FINALIZADOS">Finalizados</option>
+                      <option value="ANULADOS">Anulados</option>
                     </select>
 
                     <input
@@ -743,20 +956,48 @@ function App() {
                     />
                   </div>
                 </div>
-                <MovimientosTabla movimientos={movimientosFiltrados} />
+
+                {errorHistorial && <p className="form-message error">{errorHistorial}</p>}
+
+                <MovimientosTabla
+                  movimientos={movimientosFiltrados}
+                  esAdministrador={usuario.rol === "ADMINISTRADOR"}
+                  onAccionAdmin={abrirAccionMovimiento}
+                />
               </section>
             </>
           )}
 
-          {seccion === "clientes" && usuario.rol === "ADMINISTRADOR" && <Clientes />}
+          {seccion === "clientes" && <Clientes rol={usuario.rol} />}
+          {seccion === "vehiculos" && usuario.rol === "ADMINISTRADOR" && <Vehiculos token={token} />}
           {seccion === "operadores" && usuario.rol === "ADMINISTRADOR" && <Operadores token={token} />}
+          {seccion === "auditoria" && usuario.rol === "ADMINISTRADOR" && <Auditoria />}
+          {seccion === "celdas" && usuario.rol === "ADMINISTRADOR" && <Celdas token={token} />}
+          {seccion === "suscripciones" && usuario.rol === "ADMINISTRADOR" && <Suscripciones token={token} />}
         </div>
       </main>
+
+      {usuario.rol === "ADMINISTRADOR" && accionMovimiento && movimientoSeleccionado && (
+        <MovimientosAdmin
+          key={`${accionMovimiento}-${movimientoSeleccionado.id}`}
+          token={token}
+          movimiento={movimientoSeleccionado}
+          accion={accionMovimiento}
+          onCerrar={cerrarAccionMovimiento}
+          onActualizado={() => setVersionHistorial((version) => version + 1)}
+        />
+      )}
+
+      {mostrarCuenta && (
+        <Modal label="Mi cuenta" onClose={() => setMostrarCuenta(false)}>
+          <Cuenta token={token} usuario={usuario} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function Login({ onSubmit, error }) {
+function Login({ onSubmit, error, onRecuperar }) {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={onSubmit}>
@@ -768,66 +1009,17 @@ function Login({ onSubmit, error }) {
         <label className="field"><span>Contraseña</span><input name="password" type="password" autoComplete="current-password" required placeholder="Tu contraseña" /></label>
         {error && <div className="form-message error" role="alert">{error}</div>}
         <button className="primary-button auth-submit" type="submit">Iniciar sesión</button>
+        {onRecuperar && (
+          <button type="button" className="text-button" onClick={onRecuperar}>
+            ¿Olvidaste tu contraseña?
+          </button>
+        )}
       </form>
     </div>
   );
 }
 
-function Operadores({ token }) {
-  const [operadores, setOperadores] = useState([]);
-  const [mensaje, setMensaje] = useState("");
-  const [tipoMensaje, setTipoMensaje] = useState("success");
-  const [guardando, setGuardando] = useState(false);
-  const headers = { Authorization: `Bearer ${token}` };
-  async function cargar() {
-    const r = await fetch(`${API_URL}/operadores`, { headers });
-    const j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible consultar usuarios.");
-    setOperadores(j.data || []);
-  }
-  useEffect(() => { cargar().catch(e => { setMensaje(e.message); setTipoMensaje("error"); }); }, []);
-  async function crear(event) {
-    event.preventDefault(); setGuardando(true); setMensaje("");
-    const formulario = event.currentTarget;
-    const fd = new FormData(formulario);
-    const datos = Object.fromEntries(fd.entries());
-    try {
-      const r = await fetch(`${API_URL}/operadores`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(datos) });
-      const j = await r.json(); if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible crear el usuario.");
-      formulario.reset(); setMensaje("Usuario creado correctamente."); setTipoMensaje("success"); await cargar();
-    } catch (e) { setMensaje(e.message); setTipoMensaje("error"); }
-    finally { setGuardando(false); }
-  }
-  async function cambiarEstado(item) {
-    const estado = item.estado === "ACTIVO" ? "SUSPENDIDO" : "ACTIVO";
-    if (!window.confirm(`¿Deseas ${estado === "ACTIVO" ? "activar" : "suspender"} a ${item.nombre}?`)) return;
-    try {
-      const r = await fetch(`${API_URL}/operadores/${item.id}/estado`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ estado }) });
-      const j = await r.json(); if (!r.ok || !j.ok) throw new Error(j.mensaje || "No fue posible cambiar el estado.");
-      setMensaje(j.mensaje); setTipoMensaje("success"); await cargar();
-    } catch (e) { setMensaje(e.message); setTipoMensaje("error"); }
-  }
-  return (
-    <>
-      <div className="page-heading"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Gestión de usuarios</h2><p className="page-description">Crea operadores y administra sus perfiles de acceso.</p></div></div>
-      <section className="panel form-panel"><div className="form-section-heading"><span className="form-heading-icon">♧</span><div><h3>Registrar usuario</h3><p>Las credenciales serán utilizadas para iniciar sesión.</p></div></div>
-        <form onSubmit={crear}><div className="form-grid">
-          <label className="field"><span>Nombre completo *</span><input name="nombre" required maxLength="100" /></label>
-          <label className="field"><span>Documento *</span><input name="documento" required maxLength="30" /></label>
-          <label className="field"><span>Teléfono</span><input name="telefono" maxLength="20" /></label>
-          <label className="field"><span>Perfil *</span><select name="rol" defaultValue="OPERADOR"><option value="OPERADOR">Operador</option><option value="ADMINISTRADOR">Administrador</option></select></label>
-          <label className="field"><span>Contraseña inicial *</span><input name="password" type="password" minLength="10" required autoComplete="new-password" /><small>Mínimo 10 caracteres.</small></label>
-        </div><div className="form-actions"><button className="primary-button" disabled={guardando}>{guardando ? "Guardando..." : "Crear usuario"}</button></div></form>
-      </section>
-      {mensaje && <div className={`form-message ${tipoMensaje}`}>{mensaje}</div>}
-      <section className="panel recent-panel"><div className="panel-heading"><div><h3>Usuarios registrados</h3><p>{operadores.length} usuarios</p></div><button className="text-button" onClick={() => cargar()}>Actualizar</button></div>
-        <div className="table-wrapper"><table className="movement-table"><thead><tr><th>NOMBRE</th><th>DOCUMENTO</th><th>PERFIL</th><th>ESTADO</th><th>ACCIÓN</th></tr></thead><tbody>{operadores.map(item => <tr key={item.id}><td><strong>{item.nombre}</strong></td><td>{item.documento}</td><td>{item.rol === "ADMINISTRADOR" ? "Administrador" : "Operador"}</td><td>{item.bloqueado ? "Bloqueado" : item.estado}</td><td><button className="text-button" onClick={() => cambiarEstado(item)}>{item.estado === "ACTIVO" ? "Suspender" : "Activar"}</button></td></tr>)}</tbody></table></div>
-      </section>
-    </>
-  );
-}
-
-function MovimientosTabla({ movimientos }) {
+function MovimientosTabla({ movimientos, esAdministrador = false, onAccionAdmin }) {
   if (movimientos.length === 0) {
     return (
       <p className="empty-state">
@@ -848,18 +1040,31 @@ function MovimientosTabla({ movimientos }) {
             <th>HORA</th>
             <th>OPERADOR</th>
             <th>ESTADO</th>
+            {esAdministrador && <th>ACCIONES</th>}
           </tr>
         </thead>
         <tbody>
-          {movimientos.map((item, index) => (
+          {movimientos.map((item, index) => {
+            const registro = item.registroOriginal;
+            const anulado = Boolean(registro?.anulado_en);
+            const activo = Boolean(registro && !registro.fecha_salida && !anulado);
+
+            return (
             <tr key={`${item.placa}-${item.movimiento}-${index}`}>
               <td>
                 <strong className="plate-value">{item.placa}</strong>
               </td>
-              <td>{item.tipo === "CARRO" ? "Carro" : "Moto"}</td>
+              <td>{item.tipo === "CARRO" ? "Carro" : item.tipo === "CAMIONETA" ? "Camioneta" : "Moto"}</td>
               <td>
                 <span
-                  className={`movement-label ${item.movimiento === "Entrada" ? "movement-entry" : "movement-exit"}`}
+                  className={`movement-label ${
+                    item.movimiento === "Entrada"
+                      ? "movement-entry"
+                      : item.movimiento === "Salida"
+                        ? "movement-exit"
+                        : "movement-cancelled"
+                  }`}
+                  title={item.detalle || undefined}
                 >
                   {item.movimiento}
                 </span>
@@ -869,13 +1074,46 @@ function MovimientosTabla({ movimientos }) {
               <td>{item.operador || "No identificado"}</td>
               <td>
                 <span
-                  className={`pill ${item.estado === "Activo" ? "active-pill" : "neutral"}`}
+                  className={`pill ${
+                    item.estado === "Activo"
+                      ? "active-pill"
+                      : item.estado === "Anulado"
+                        ? "cancelled-pill"
+                        : "neutral"
+                  }`}
                 >
                   {item.estado}
                 </span>
               </td>
+              {esAdministrador && (
+                <td>
+                  {(item.movimiento === "Entrada" || item.movimiento === "Anulación") && (
+                    <div className="movement-row-actions">
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={anulado}
+                        title={anulado ? "El movimiento ya está anulado" : "Anular este movimiento"}
+                        onClick={() => onAccionAdmin("anular", registro)}
+                      >
+                        Anular
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={!activo}
+                        title={activo ? "Corregir este movimiento activo" : "Solo se pueden corregir movimientos activos"}
+                        onClick={() => onAccionAdmin("corregir", registro)}
+                      >
+                        Corregir
+                      </button>
+                    </div>
+                  )}
+                </td>
+              )}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

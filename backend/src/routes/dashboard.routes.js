@@ -20,7 +20,7 @@ router.get("/", async (_req, res) => {
     const [[ocupacion]] = await pool.execute(
       `SELECT
          COUNT(*) AS vehiculos_dentro,
-         SUM(v.tipo = 'CARRO') AS carros_dentro,
+         SUM(v.tipo IN ('CARRO','CAMIONETA')) AS carros_dentro,
          SUM(v.tipo = 'MOTO') AS motos_dentro
        FROM movimientos m
        INNER JOIN vehiculos v ON v.id = m.vehiculo_id

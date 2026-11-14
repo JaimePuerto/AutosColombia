@@ -2,6 +2,18 @@
 -- Creación de AUTOSCOLOMBIA
 -- Motor: MySQL 8.0.16+
 -- Base de datos limpia para la primera iteracion
+--
+-- Orden de instalación limpia (obligatorio, UTF-8/utf8mb4 en todos los scripts):
+--   1) backend/sql/schema.sql                                          (este archivo)
+--   2) backend/sql/migrations/002_autenticacion_operadores.sql
+--   3) backend/sql/migrations/003_gestion_celdas_auditoria.sql
+--   4) backend/sql/migrations/004_iteracion2_auditoria_movimientos.sql
+--   5) backend/sql/migrations/005_cierre_iteracion2_seguridad.sql
+--   6) backend/sql/migrations/006_estados_suscripcion_ea2.sql
+--   7) backend/sql/migrations/007_tipo_vehiculo_camioneta.sql
+--   8) backend/sql/migrations/008_datos_obligatorios_clientes.sql
+--   9) backend/sql/migrations/009_historicos_append_only.sql
+--  10) backend/sql/migrations/010_integridad_campos_ea2.sql
 
 
 CREATE DATABASE IF NOT EXISTS autoscolombia
@@ -24,7 +36,7 @@ CREATE TABLE operadores (
 CREATE TABLE vehiculos (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     placa VARCHAR(10) NOT NULL UNIQUE,
-    tipo ENUM('CARRO', 'MOTO') NOT NULL,
+    tipo ENUM('CARRO', 'MOTO', 'CAMIONETA') NOT NULL,
     marca VARCHAR(50),
     modelo VARCHAR(50),
     color VARCHAR(30),
@@ -123,8 +135,8 @@ CREATE TABLE suscripciones (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     vehiculo_id BIGINT UNSIGNED NOT NULL,
     valor DECIMAL(12, 2) NOT NULL,
-    estado ENUM('PENDIENTE', 'ACTIVA', 'VENCIDA', 'CANCELADA')
-        NOT NULL DEFAULT 'PENDIENTE',
+    estado ENUM('PROGRAMADA', 'VIGENTE', 'VENCIDA', 'CANCELADA')
+        NOT NULL DEFAULT 'PROGRAMADA',
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE NOT NULL,
     creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

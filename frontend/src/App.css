@@ -14,6 +14,14 @@
   padding: 27px 17px 18px;
   color: #d8e0ed;
   background: #17263e;
+
+  /* SCROLL VERTICAL SIDEBAR AUTOSCOLOMBIA */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #526783 #17263e;
+  -webkit-overflow-scrolling: touch;
 }
 
 .brand {
@@ -199,9 +207,115 @@
 }
 
 .user-profile {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.user-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.user-menu-trigger:hover,
+.user-menu-trigger[aria-expanded="true"] {
+  border-color: #e4ebf5;
+  background: #f7f9fc;
+}
+
+.user-menu-info {
+  min-width: 0;
+}
+
+.user-menu-chevron {
+  margin-left: 4px;
+  color: #8b97a9;
+  font-size: 16px;
+  transition: transform 0.18s;
+}
+
+.user-menu-chevron.open {
+  transform: rotate(180deg);
+}
+
+.user-dropdown {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 248px;
+  padding: 7px;
+  border: 1px solid #e6ebf2;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(28, 45, 71, 0.16);
+}
+
+.user-dropdown-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: 9px;
+  color: #334158;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-dropdown-option:hover {
+  background: #f4f7fc;
+}
+
+.user-dropdown-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: #3268c5;
+  background: #eaf1ff;
+  font-size: 17px;
+}
+
+.user-dropdown-option strong,
+.user-dropdown-option small {
+  display: block;
+}
+
+.user-dropdown-option strong {
+  color: #334158;
+  font-size: 11px;
+}
+
+.user-dropdown-option small {
+  margin-top: 4px;
+  color: #8995a8;
+  font-size: 10px;
+}
+
+.user-dropdown-option.logout-option {
+  margin-top: 5px;
+  border-top: 1px solid #edf0f5;
+  border-radius: 0 0 9px 9px;
+}
+
+.user-dropdown-option.logout-option .user-dropdown-icon {
+  color: #b54747;
+  background: #fff0f0;
 }
 
 .avatar {
@@ -232,6 +346,10 @@
   font-size: 10px;
 }
 
+.cuenta-modal-panel {
+  margin: 0 auto;
+}
+
 .page-content {
   width: 100%;
   max-width: 1500px;
@@ -245,6 +363,13 @@
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 25px;
+}
+
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .eyebrow {
@@ -441,6 +566,11 @@
   background: #e4f7ee;
 }
 
+.cancelled-pill {
+  color: #a03333;
+  background: #fbeaea;
+}
+
 .occupancy-summary {
   display: flex;
   flex-wrap: wrap;
@@ -628,6 +758,12 @@
   cursor: pointer;
 }
 
+/* RNF-11: las acciones de administración se muestran deshabilitadas para el operador. */
+.text-button:disabled {
+  color: #b3bcc9;
+  cursor: not-allowed;
+}
+
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -655,6 +791,16 @@
   border-bottom: 1px solid #f0f2f6;
   color: #6f7d90;
   font-size: 10px;
+}
+
+.movement-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.movement-row-actions .text-button {
+  padding: 5px 1px;
 }
 
 .movement-table tbody tr:last-child td {
@@ -685,9 +831,77 @@
   background: #e6f7ef;
 }
 
+.movement-cancelled {
+  color: #a03333;
+  background: #fbeaea;
+}
+
 .form-panel {
   max-width: 900px;
   padding: 25px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 32, 52, 0.52);
+  backdrop-filter: blur(5px);
+}
+
+.modal-dialog {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: min(88vh, 900px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.modal-dialog > .form-panel {
+  max-width: none;
+  padding: 14px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.modal-dialog .form-section-heading {
+  padding-right: 42px;
+}
+
+.modal-close {
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: #64748b;
+  background: #f1f5f9;
+  cursor: pointer;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #1d4ed8;
+  background: #eaf1ff;
+}
+
+.modal-dialog .form-grid {
+  padding: 20px 0;
 }
 
 .form-section-heading {
@@ -747,6 +961,7 @@
 
 .field input,
 .field select,
+.field textarea,
 .search-input {
   width: 100%;
   min-height: 42px;
@@ -763,6 +978,7 @@
 
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .search-input:focus {
   border-color: #6d9ce6;
   box-shadow: 0 0 0 3px #eaf1ff;
@@ -900,6 +1116,7 @@
     position: static;
     width: auto;
     padding: 17px 13px;
+    overflow: visible;
   }
 
   .brand {
@@ -951,6 +1168,10 @@
     align-items: flex-start;
   }
 
+  .heading-actions {
+    justify-content: flex-end;
+  }
+
   .page-heading h2 {
     font-size: 22px;
   }
@@ -978,6 +1199,25 @@
 
   .panel {
     padding: 15px;
+  }
+
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .modal-dialog {
+    max-height: 94vh;
+    padding: 10px;
+    border-radius: 13px;
+  }
+
+  .modal-dialog > .form-panel {
+    padding: 10px;
+  }
+
+  .modal-dialog .form-grid {
+    grid-template-columns: 1fr;
+    gap: 17px;
   }
 
   .form-grid {
@@ -1009,8 +1249,13 @@
     gap: 3px;
   }
 
-  .user-profile > div:last-child {
+  .user-menu-info {
     display: none;
+  }
+
+  .user-menu-trigger {
+    gap: 5px;
+    padding: 5px;
   }
 
   .page-heading {
@@ -1093,4 +1338,37 @@
 @media (max-width: 640px) {
   .auth-card { padding: 26px 22px; }
   .logout-button { margin-left: 0; }
+}
+
+
+/* SCROLL VERTICAL SIDEBAR AUTOSCOLOMBIA */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: #17263e;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #526783;
+  border-radius: 10px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #7890ad;
+}
+
+
+/* Gestión de suscripciones - Iteración 2 */
+.subscription-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 13px;
+}
+.subscription-subtext {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
 }

@@ -23,3 +23,13 @@ Thumbs.db
 
 # Test and coverage output
 coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# Internal working folders (not published)
+Implementaciones/
+Respaldo/
+
+# Resultados locales de pruebas E2E
+frontend/e2e/.artifacts/

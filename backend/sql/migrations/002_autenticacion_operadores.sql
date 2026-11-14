@@ -1,4 +1,5 @@
 -- AutosColombia - Iteración 2: autenticación y sesiones.
+-- Paso 2 de 7 del orden de instalación limpia (ver backend/sql/schema.sql).
 -- Ejecutar UNA SOLA VEZ sobre la base autoscolombia.
 -- No elimina ni reconstruye tablas ni registros existentes.
 USE autoscolombia;

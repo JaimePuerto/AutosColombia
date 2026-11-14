@@ -1,0 +1,47 @@
+.celda-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.celda-summary-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.celda-summary-card > span {
+  color: var(--muted, #64748b);
+  font-size: 0.9rem;
+}
+.celda-summary-card > strong {
+  color: var(--text, #172033);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+.celda-summary-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  color: var(--muted, #64748b);
+  font-size: 0.85rem;
+}
+.celda-summary-detail b { color: var(--text, #172033); }
+.celda-history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.celda-history-heading h3 { margin: 0 0 5px; }
+.celda-history-heading p { margin: 0; color: var(--muted, #64748b); }
+.celda-reason-panel textarea {
+  width: 100%;
+  resize: vertical;
+}
+.celda-summary + .form-panel { margin-top: 18px; }
+@media (max-width: 760px) {
+  .celda-summary { grid-template-columns: 1fr; }
+  .celda-history-heading { align-items: flex-start; flex-direction: column; }
+}

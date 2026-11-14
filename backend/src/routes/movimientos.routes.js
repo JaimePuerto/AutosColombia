@@ -4,6 +4,7 @@ import pool from "../config/database.js";
 import {
   registrarEntrada,
   registrarSalida,
+  listarMovimientos,
 } from "../services/movimientos.service.js";
 
 const router = Router();
@@ -79,38 +80,24 @@ router.get("/vehiculo/:placa", async (req, res) => {
   }
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const [filas] = await pool.execute(
-      `SELECT
-          m.id,
-          v.placa,
-          v.tipo,
-          c.codigo AS celda,
-          m.fecha_entrada,
-          m.fecha_salida,
-          m.acceso_entrada,
-          m.acceso_salida,
-          m.operador_entrada_id,
-          m.operador_salida_id,
-          oe.nombre AS operador_entrada,
-          os.nombre AS operador_salida
-       FROM movimientos m
-       INNER JOIN vehiculos v ON v.id = m.vehiculo_id
-       INNER JOIN celdas c ON c.id = m.celda_id
-       LEFT JOIN operadores oe
-          ON oe.id = m.operador_entrada_id
-       LEFT JOIN operadores os
-          ON os.id = m.operador_salida_id
-       ORDER BY m.fecha_entrada DESC
-       LIMIT 200`
-    );
+    const filas = await listarMovimientos({
+      estado: req.query.estado,
+      placa: req.query.placa || req.query.buscar,
+      limite: req.query.limite,
+    });
 
     res.json({
       ok: true,
+      total: filas.length,
       data: filas,
     });
   } catch (error) {
+    if (error.message === "El estado del movimiento no es válido.") {
+      return res.status(400).json({ ok: false, mensaje: error.message });
+    }
+
     console.error("Error al consultar el historial:", error);
 
     res.status(500).json({
