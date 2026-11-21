@@ -26,8 +26,8 @@ AutosColombia/
 │   │       ├── 008_datos_obligatorios_clientes.sql
 │   │       ├── 009_historicos_append_only.sql
 │   │       ├── 010_integridad_campos_ea2.sql
-│   │       └── 011_normalizacion_mensualidades_30_dias.sql
-│   │       └── 012_crear_tabla_pagos.sql
+│   │       ├── 011_normalizacion_mensualidades_30_dias.sql
+│   │       ├── 012_crear_tabla_pagos.sql
 │   │       └── 013_gestion_tarifas.sql
 │   ├── src/
 │   │   ├── config/
