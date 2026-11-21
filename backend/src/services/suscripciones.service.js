@@ -29,16 +29,18 @@ async function validarFechaInicioNoPasada(connection, fechaInicio) {
 // sin inventar transacciones económicas.
 function validarSuscripcion(datos) {
   const vehiculoId = Number(datos.vehiculo_id);
-  const valor = datos.valor === undefined || datos.valor === null || datos.valor === ""
-    ? 0
-    : Number(datos.valor);
-  if (!Number.isInteger(vehiculoId) || vehiculoId <= 0) throw new Error("Debes seleccionar un vehículo válido.");
-  if (!Number.isFinite(valor) || valor < 0) throw new Error("El valor de la suscripción no puede ser negativo.");
+  if (!Number.isInteger(vehiculoId) || vehiculoId <= 0) {
+    throw new Error("Debes seleccionar un vehículo válido.");
+  }
   const fechaInicio = datos.fecha_inicio;
   const fechaFin = datos.fecha_fin;
-  if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) throw new Error("Debes ingresar fechas válidas en formato AAAA-MM-DD.");
-  if (fechaFin !== sumarDias(fechaInicio, 29)) throw new Error("La suscripción debe tener exactamente 30 días calendario, contando el día inicial.");
-  return { vehiculoId, valor, fechaInicio, fechaFin };
+  if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) {
+    throw new Error("Debes ingresar fechas válidas en formato AAAA-MM-DD.");
+  }
+  if (fechaFin !== sumarDias(fechaInicio, 29)) {
+    throw new Error("La suscripción debe tener exactamente 30 días calendario, contando el día inicial.");
+  }
+  return { vehiculoId, fechaInicio, fechaFin };
 }
 
 const SELECT_BASE = `
@@ -91,18 +93,59 @@ export async function obtenerSuscripcionPorPlaca(placa) {
 }
 
 export async function crearSuscripcion(datos, operadorId) {
-  const { vehiculoId, valor, fechaInicio, fechaFin } = validarSuscripcion(datos);
+  const { vehiculoId, fechaInicio, fechaFin } = validarSuscripcion(datos);
   const cx = await pool.getConnection();
   try {
     await cx.beginTransaction();
     await validarFechaInicioNoPasada(cx, fechaInicio);
     const [vehiculos] = await cx.execute(
-      "SELECT id, activo FROM vehiculos WHERE id=? FOR UPDATE", [vehiculoId]
+      "SELECT id, tipo, activo FROM vehiculos WHERE id = ? FOR UPDATE",
+      [vehiculoId]
     );
-    if (!vehiculos.length) throw new Error("El vehículo no existe.");
-    if (!vehiculos[0].activo) throw new Error("No se puede registrar una suscripción para un vehículo inactivo.");
+    if (!vehiculos.length) {
+      throw new Error("El vehículo no existe.");
+    }
+    if (!vehiculos[0].activo) {
+      throw new Error("No se puede registrar una suscripción para un vehículo inactivo.");
+    }
+    // Las camionetas utilizan la tarifa de carro.
+    const tipoTarifa = vehiculos[0].tipo === "CAMIONETA"
+      ? "CARRO"
+      : vehiculos[0].tipo;
+    // Consultar la tarifa activa correspondiente a la fecha de inicio.
+    // Consultar el identificador del tipo sin bloquear el catálogo.
+    const [tipos] = await cx.execute(
+      `SELECT id
+      FROM tipos_vehiculo
+      WHERE codigo = ?
+      LIMIT 1`,
+      [tipoTarifa]
+    );
 
-    // Las canceladas no ocupan fechas; el resto conserva su período, incluso vencido.
+    if (!tipos.length) {
+      throw new Error(`No existe el tipo de vehículo ${tipoTarifa} en el catálogo.`);
+    }
+
+    // Bloquear únicamente la tarifa seleccionada.
+    const [tarifas] = await cx.execute(
+      `SELECT id, valor
+      FROM tarifas
+      WHERE tipo_vehiculo_id = ?
+        AND estado = 'ACTIVA'
+        AND fecha_inicio <= ?
+        AND (fecha_fin IS NULL OR fecha_fin >= ?)
+      ORDER BY fecha_inicio DESC, id DESC
+      LIMIT 1 FOR UPDATE`,
+      [tipos[0].id, fechaInicio, fechaInicio]
+    );
+    if (!tarifas.length) {
+      throw new Error(
+        `No existe una tarifa activa para ${tipoTarifa} en la fecha de inicio seleccionada.`
+      );
+    }
+    const valor = Number(tarifas[0].valor);
+    const tarifaId = Number(tarifas[0].id);
+    // Verificar que no exista otro período que se cruce.
     const [cruces] = await cx.execute(
       `SELECT id, estado, fecha_inicio, fecha_fin
        FROM suscripciones
@@ -115,27 +158,34 @@ export async function crearSuscripcion(datos, operadorId) {
     );
     if (cruces.length) {
       const x = cruces[0];
-      throw new Error(`El período se cruza con la suscripción #${x.id} (${x.fecha_inicio} a ${x.fecha_fin}, ${x.estado}). Las suscripciones canceladas sí liberan sus fechas.`);
+      throw new Error(
+        `El período se cruza con la suscripción #${x.id} (${x.fecha_inicio} a ${x.fecha_fin}, ${x.estado}). Las suscripciones canceladas sí liberan sus fechas.`
+      );
     }
-
-    // Si el administrador no envía fechas, el backend puede calcular el siguiente período.
-    // La interfaz actual envía fechas; para renovaciones, la fecha propuesta debe ser el día
-    // siguiente al último período no cancelado. Se valida aquí para impedir saltos/solapamientos.
+    // Validar continuidad de las renovaciones.
     const [anteriores] = await cx.execute(
-      `SELECT fecha_fin FROM suscripciones
-       WHERE vehiculo_id=? AND estado <> 'CANCELADA'
-       ORDER BY fecha_fin DESC, id DESC LIMIT 1 FOR UPDATE`,
+      `SELECT fecha_fin
+       FROM suscripciones
+       WHERE vehiculo_id = ?
+         AND estado <> 'CANCELADA'
+       ORDER BY fecha_fin DESC, id DESC
+       LIMIT 1 FOR UPDATE`,
       [vehiculoId]
     );
     if (anteriores.length) {
-      const inicioEsperado = sumarDias(String(anteriores[0].fecha_fin).slice(0,10), 1);
+      const inicioEsperado = sumarDias(
+        String(anteriores[0].fecha_fin).slice(0, 10),
+        1
+      );
       if (fechaInicio !== inicioEsperado) {
-        throw new Error(`La renovación debe iniciar el ${inicioEsperado}, día siguiente al último período no cancelado.`);
+        throw new Error(
+          `La renovación debe iniciar el ${inicioEsperado}, día siguiente al último período no cancelado.`
+        );
       }
     }
-
     const [ins] = await cx.execute(
-      `INSERT INTO suscripciones (vehiculo_id, valor, estado, fecha_inicio, fecha_fin)
+      `INSERT INTO suscripciones
+       (vehiculo_id, valor, estado, fecha_inicio, fecha_fin)
        VALUES (?, ?, 'PROGRAMADA', ?, ?)`,
       [vehiculoId, valor, fechaInicio, fechaFin]
     );
@@ -144,22 +194,23 @@ export async function crearSuscripcion(datos, operadorId) {
       accion: "CREAR",
       entidad: "SUSCRIPCION",
       entidadId: ins.insertId,
-      motivo: "Registro de nueva suscripción.",
+      motivo: "Registro de nueva suscripción con tarifa vigente.",
       anteriores: null,
       nuevos: {
         vehiculo_id: vehiculoId,
+        tarifa_id: tarifaId,
+        tipo_tarifa: tipoTarifa,
         valor,
         estado: "PROGRAMADA",
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin
       }
     });
-
     await cx.commit();
     return await obtenerSuscripcion(ins.insertId);
-  } catch (e) {
+  } catch (error) {
     await cx.rollback();
-    throw e;
+    throw error;
   } finally {
     cx.release();
   }

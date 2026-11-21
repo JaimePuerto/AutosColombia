@@ -33,7 +33,10 @@ export default function Suscripciones({ token }) {
   const [estado, setEstado] = useState("TODOS");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [vehiculoId, setVehiculoId] = useState("");
-  const [valor, setValor] = useState("");
+  //const [valor, setValor] = useState("");
+  const [tarifa, setTarifa] = useState(null);
+  const [cargandoTarifa, setCargandoTarifa] = useState(false);
+  const [errorTarifa, setErrorTarifa] = useState("");
   const [fechaInicio, setFechaInicio] = useState(fechaLocalISO());
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("success");
@@ -90,22 +93,47 @@ export default function Suscripciones({ token }) {
   const fechaFin = fechaInicio ? sumarDiasISO(fechaInicio, 29) : "";
   useEffect(() => {
     let vigente = true;
-    async function cargarHistorialVehiculo() {
-      if (!vehiculoId) { setHistorialVehiculo([]); setFechaInicio(fechaLocalISO()); return; }
+
+    async function consultarTarifa() {
+      setTarifa(null);
+      setErrorTarifa("");
+      if (!vehiculoSeleccionado || !fechaInicio) return;
+      setCargandoTarifa(true);
       try {
-        const resultado = await request(`${API_URL}/suscripciones?vehiculo_id=${encodeURIComponent(vehiculoId)}`);
-        if (vigente) setHistorialVehiculo(resultado.data || []);
-      } catch (error) {
-        if (vigente) {
-          setHistorialVehiculo([]);
-          setMensaje(error.message);
-          setTipoMensaje("error");
+        const resultado = await request(`${API_URL}/tarifas`);
+        const tipoTarifa = vehiculoSeleccionado.tipo === "CAMIONETA"
+          ? "CARRO"
+          : vehiculoSeleccionado.tipo;
+        const tarifaEncontrada = (resultado.data || [])
+          .filter(t =>
+            t.codigo === tipoTarifa &&
+            t.estado === "ACTIVA" &&
+            String(t.fecha_inicio).slice(0, 10) <= fechaInicio &&
+            (!t.fecha_fin || String(t.fecha_fin).slice(0, 10) >= fechaInicio)
+          )
+          .sort((a, b) =>
+            String(b.fecha_inicio).slice(0, 10)
+              .localeCompare(String(a.fecha_inicio).slice(0, 10))
+          )[0];
+        if (!vigente) return;
+        if (!tarifaEncontrada) {
+          setErrorTarifa(
+            `No existe una tarifa activa para ${tipoTarifa} en la fecha seleccionada.`
+          );
+          return;
         }
+        setTarifa(tarifaEncontrada);
+      } catch (error) {
+        if (vigente) setErrorTarifa(error.message);
+      } finally {
+        if (vigente) setCargandoTarifa(false);
       }
     }
-    cargarHistorialVehiculo();
-    return () => { vigente = false; };
-  }, [vehiculoId, request]);
+    consultarTarifa();
+    return () => {
+      vigente = false;
+    };
+  }, [vehiculoSeleccionado, fechaInicio, request]);
 
   const ultimaSuscripcion = useMemo(() => historialVehiculo
     .filter(s => s.estado !== "CANCELADA")
@@ -114,7 +142,8 @@ export default function Suscripciones({ token }) {
 
   function abrirFormulario() {
     setVehiculoId("");
-    setValor("");
+    setTarifa(null);
+    setErrorTarifa("");
     setFechaInicio(fechaLocalISO());
     setMostrarFormulario(true);
     setMensaje("");
@@ -123,7 +152,8 @@ export default function Suscripciones({ token }) {
   function cerrarFormulario() {
     setMostrarFormulario(false);
     setVehiculoId("");
-    setValor("");
+    setTarifa(null);
+    setErrorTarifa("");
     setFechaInicio(fechaLocalISO());
   }
 
@@ -137,21 +167,23 @@ export default function Suscripciones({ token }) {
     event.preventDefault();
     setGuardando(true);
     setMensaje("");
+
     try {
       if (!vehiculoId) throw new Error("Selecciona un vehículo.");
-      if (Number(valor) <= 0) throw new Error("Ingresa un valor mayor que cero.");
+      if (!tarifa) throw new Error("No hay una tarifa activa para el vehículo y la fecha seleccionados.");
+
       await request(`${API_URL}/suscripciones`, {
         method: "POST",
         body: JSON.stringify({
           vehiculo_id: Number(vehiculoId),
-          valor: Number(valor),
           fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
+          fecha_fin: fechaFin
         }),
       });
+
       cerrarFormulario();
       await cargar();
-      setMensaje("Suscripción registrada. El estado se actualizará automáticamente según su fecha de inicio.");
+      setMensaje("Suscripción registrada correctamente con la tarifa vigente.");
       setTipoMensaje("success");
     } catch (error) {
       setMensaje(error.message);
@@ -259,8 +291,21 @@ export default function Suscripciones({ token }) {
             </select>
           </label>
           <label className="field">
-            <span>Valor de la suscripción (COP) *</span>
-            <input type="number" min="1" step="1" value={valor} onChange={e => setValor(e.target.value)} required placeholder="Ej. 150000" />
+            <span>Valor de la suscripción (COP)</span>
+            <input
+              type="text"
+              value={
+                cargandoTarifa
+                  ? "Consultando tarifa..."
+                  : tarifa
+                    ? moneda(tarifa.valor)
+                    : "Sin tarifa disponible"
+              }
+              readOnly
+            />
+            <small>
+              El valor se obtiene automáticamente de la tarifa vigente.
+            </small>
           </label>
           <label className="field">
             <span>Fecha de inicio *</span>
@@ -273,10 +318,33 @@ export default function Suscripciones({ token }) {
             <small>Duración: 30 días calendario, incluyendo el día inicial.</small>
           </label>
         </div>
+        {errorTarifa && (
+          <div className="form-message error" role="alert">
+            {errorTarifa}
+          </div>
+        )}
+        {tarifa && (
+          <div className="subscription-note">
+            Tarifa aplicada: <strong>{tarifa.nombre}</strong>.
+            Valor: <strong>{moneda(tarifa.valor)}</strong>.
+          </div>
+        )}
         {vehiculoSeleccionado && <p className="subscription-note">Vehículo seleccionado: <strong>{vehiculoSeleccionado.placa}</strong>. La suscripción queda en estado <strong>Programada</strong> hasta que comience el período.</p>}
         <div className="form-actions">
           <button type="button" className="secondary-button" onClick={cerrarFormulario} disabled={guardando}>Cancelar</button>
-          <button type="submit" className="primary-button" disabled={guardando || cargando || !vehiculos.length}>{guardando ? "Guardando..." : "Registrar suscripción"}</button>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={
+              guardando ||
+              cargando ||
+              cargandoTarifa ||
+              !vehiculos.length ||
+              !tarifa
+            }
+          >
+            {guardando ? "Guardando..." : "Registrar suscripción"}
+          </button>
         </div>
       </form>
     </section>

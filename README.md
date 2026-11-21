@@ -27,6 +27,8 @@ AutosColombia/
 │   │       ├── 009_historicos_append_only.sql
 │   │       ├── 010_integridad_campos_ea2.sql
 │   │       └── 011_normalizacion_mensualidades_30_dias.sql
+│   │       └── 012_crear_tabla_pagos.sql
+│   │       └── 013_gestion_tarifas.sql
 │   ├── src/
 │   │   ├── config/
 │   │   ├── middleware/
@@ -83,6 +85,8 @@ Antes de ejecutar el proyecto, se necesita tener instalado:
    | 9 | `backend/sql/migrations/009_historicos_append_only.sql` |
    | 10 | `backend/sql/migrations/011_normalizacion_mensualidades_30_dias.sql` |
    | 11 | `backend/sql/migrations/010_integridad_campos_ea2.sql` |
+   | 12 | `backend/sql/migrations/012_crear_tabla_pagos.sql` |
+   | 13 | `backend/sql/migrations/013_gestion_tarifas.sql` |
 
    ```bash
    mysql -u root -p autoscolombia < backend/sql/schema.sql
@@ -96,6 +100,8 @@ Antes de ejecutar el proyecto, se necesita tener instalado:
    mysql -u root -p autoscolombia < backend/sql/migrations/009_historicos_append_only.sql
    mysql -u root -p autoscolombia < backend/sql/migrations/011_normalizacion_mensualidades_30_dias.sql
    mysql -u root -p autoscolombia < backend/sql/migrations/010_integridad_campos_ea2.sql
+   mysql -u root -p autoscolombia < backend/sql/migrations/012_crear_tabla_pagos.sql
+   mysql -u root -p autoscolombia < backend/sql/migrations/013_gestion_tarifas.sql
    ```
 4. Configurar las credenciales de conexión en el archivo `backend/.env`.
 

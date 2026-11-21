@@ -10,6 +10,7 @@ import Cuenta from "./components/Cuenta";
 import Recuperacion from "./components/Recuperacion";
 import Operadores from "./components/Operadores";
 import Modal from "./components/Modal";
+import Pagos from "./components/Pagos";
 
 const API_URL = "http://localhost:3001/api";
 
@@ -24,6 +25,7 @@ const menuItems = [
   { id: "auditoria", label: "Auditoría", icon: "◷", admin: true },
   { id: "celdas", label: "Gestión de celdas", icon: "▦", admin: true },
   { id: "suscripciones", label: "Suscripciones", icon: "▣", admin: true },
+  { id: "pagos", label: "Gestión de pagos", icon: "$" },
 ];
 
 function formatearFecha(fecha) {
@@ -974,6 +976,7 @@ function App() {
           {seccion === "auditoria" && usuario.rol === "ADMINISTRADOR" && <Auditoria />}
           {seccion === "celdas" && usuario.rol === "ADMINISTRADOR" && <Celdas token={token} />}
           {seccion === "suscripciones" && usuario.rol === "ADMINISTRADOR" && <Suscripciones token={token} />}
+          {seccion === "pagos" && ( <Pagos token={token} rol={usuario.rol} />)}
         </div>
       </main>
 

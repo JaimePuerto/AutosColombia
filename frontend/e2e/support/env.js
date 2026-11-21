@@ -45,6 +45,8 @@ export const SCRIPTS = [
   "migrations/009_historicos_append_only.sql",
   "migrations/011_normalizacion_mensualidades_30_dias.sql",
   "migrations/010_integridad_campos_ea2.sql",
+  "migrations/012_crear_tabla_pagos.sql",
+  "migrations/013_gestion_tarifas.sql",
 ];
 
 // Credenciales de prueba usadas por los escenarios M-01…M-18.

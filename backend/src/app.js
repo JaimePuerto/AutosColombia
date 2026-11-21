@@ -14,6 +14,8 @@ import suscripcionesRoutes from './routes/suscripciones.routes.js';
 import operadoresRoutes from './routes/operadores.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
 import movimientosAdminRoutes from './routes/movimientos.admin.routes.js';
+import pagosRoutes from './routes/pagos.routes.js';
+import tarifasRoutes from './routes/tarifas.routes.js';
 
 dotenv.config();
 const app = express();
@@ -39,6 +41,8 @@ app.use('/api/suscripciones', suscripcionesRoutes);
 app.use('/api/operadores', operadoresRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/movimientos-admin', movimientosAdminRoutes);
+app.use('/api/pagos', pagosRoutes);
+app.use('/api/tarifas', tarifasRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error('Error no controlado en API:', error);

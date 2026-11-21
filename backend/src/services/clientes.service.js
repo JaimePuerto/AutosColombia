@@ -1,4 +1,3 @@
-
 import pool from "../config/database.js";
 import { registrarAuditoria } from "./auditoria.service.js";
 import { insertarVehiculo } from "./vehiculos.service.js";
@@ -21,11 +20,34 @@ async function mensualidadesPorVehiculo(ids) {
 
   const marcadores = ids.map(() => "?").join(",");
   const [filas] = await pool.execute(
-    `SELECT vehiculo_id, estado, fecha_inicio, fecha_fin
-     FROM suscripciones
-     WHERE vehiculo_id IN (${marcadores})
-     ORDER BY vehiculo_id, fecha_inicio DESC, id DESC`,
-    ids,
+    `SELECT
+        s.id,
+        s.vehiculo_id,
+        s.valor,
+        s.estado,
+        s.fecha_inicio,
+        s.fecha_fin,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM pagos p
+            WHERE p.suscripcion_id = s.id
+              AND p.estado = 'APROBADO'
+          ) THEN 'PAGADO'
+          ELSE 'PENDIENTE'
+        END AS estado_pago,
+        (
+          SELECT p.numero_comprobante
+          FROM pagos p
+          WHERE p.suscripcion_id = s.id
+            AND p.estado = 'APROBADO'
+          ORDER BY p.id DESC
+          LIMIT 1
+        ) AS numero_comprobante
+    FROM suscripciones s
+    WHERE s.vehiculo_id IN (${marcadores})
+    ORDER BY s.vehiculo_id, s.fecha_inicio DESC, s.id DESC`,
+    ids
   );
 
   for (const fila of filas) {
@@ -36,9 +58,13 @@ async function mensualidadesPorVehiculo(ids) {
       resultado.set(clave, {
         orden,
         mensualidad: {
+          id: fila.id,
+          valor: fila.valor,
           estado: fila.estado,
           fecha_inicio: fila.fecha_inicio,
           fecha_fin: fila.fecha_fin,
+          estado_pago: fila.estado_pago,
+          numero_comprobante: fila.numero_comprobante,
         },
       });
     }
