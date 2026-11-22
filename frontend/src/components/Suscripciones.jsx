@@ -429,7 +429,7 @@ export default function Suscripciones({ token }) {
                 <td>{item.cliente || "—"}</td>
                 <td>{formatoFecha(item.fecha_inicio)} – {formatoFecha(item.fecha_fin)}</td>
                 <td>{moneda(item.valor)}</td>
-                <td><span className={`pill ${item.estado === "VIGENTE" ? "active-pill" : "neutral"}`}>{item.estado}</span></td>
+                <td><span className={`pill ${item.estado === "VIGENTE" ? "active-pill" : item.estado === "CANCELADA" ? "cancelled-pill" : item.estado === "VENCIDA" ? "expired-pill" : item.estado === "PROGRAMADA" ? "scheduled-pill" : "neutral"}`}>{item.estado}</span></td>
                 <td>
                   <div className="client-actions">
                     {item.estado !== "CANCELADA" && <button type="button" className="text-button" disabled={guardando} onClick={() => cancelar(item)}>Cancelar</button>}

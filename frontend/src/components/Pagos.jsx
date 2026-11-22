@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./Pagos.css";
 
@@ -855,6 +854,13 @@ const mensualidadCancelada = mensualidad?.estado === "CANCELADA";
                 </button>
               )}
             </div>
+            {errorTarifas && (
+              <div className="form-message error">{errorTarifas}</div>
+            )}
+
+            {mensajeTarifas && (
+              <div className="form-message success">{mensajeTarifas}</div>
+            )}
           </form>
 
           <div className="form-section-heading" style={{ marginTop: "32px" }}>
@@ -889,7 +895,7 @@ const mensualidadCancelada = mensualidad?.estado === "CANCELADA";
                       <td>{fecha(tarifa.fecha_inicio)}</td>
                       <td>{fecha(tarifa.fecha_fin)}</td>
                       <td>
-                        <span className={`pagos-status ${tarifa.estado.toLowerCase()}`}>
+                        <span className={`tarifa-status ${tarifa.estado.toLowerCase()}`}>
                           {tarifa.estado}
                         </span>
                       </td>

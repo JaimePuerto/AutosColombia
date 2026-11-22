@@ -571,6 +571,10 @@
   background: #fbeaea;
 }
 
+.expired-pill { background-color: #ffedd5; color: #c2410c; }
+
+.scheduled-pill { background-color: #dbeafe; color: #1d4ed8; }
+
 .occupancy-summary {
   display: flex;
   flex-wrap: wrap;
